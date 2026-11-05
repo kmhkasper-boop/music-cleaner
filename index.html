@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111318">
+<title>Music Cleaner — Lucas Casca</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div>
+      <h1>Music Cleaner <span class="badge">LOCAL</span></h1>
+      <div class="sub">STFT spectral cleanup for Suno / AI tracks · Ableton · Audition · Studio One</div>
+    </div>
+    <div class="topRight">
+      <span class="pill" id="globalStatus">Ready</span>
+    </div>
+  </header>
+
+  <div class="howit">
+    <strong>How it works:</strong> builds a noise profile from the quietest frames (adjustable %),
+    soft spectral subtraction with oversubtraction + max reduction cap, original phase kept,
+    sample-exact length. Optional Master: EQ · glue compress · lookahead limiter. Everything stays in your browser.
+  </div>
+
+  <div class="controls">
+    <label id="drop">Drop WAV / MP3 here or click to add
+      <input id="fileInput" type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a" multiple>
+    </label>
+    <button id="btnProcessAll" class="primary" disabled>Process all</button>
+    <button id="btnStop" disabled>Stop</button>
+    <button id="btnClear" class="danger" disabled>Clear</button>
+    <label class="chk"><input type="checkbox" id="chkMaster" checked> Master</label>
+    <label class="chk"><input type="checkbox" id="chkSaveClean" checked> Save Clean</label>
+    <label class="chk"><input type="checkbox" id="chkSaveMaster" checked> Save Mastered</label>
+    <select id="bitDepth" title="Export bit depth">
+      <option value="24">WAV 24-bit</option>
+      <option value="16">WAV 16-bit (TPDF)</option>
+    </select>
+    <button id="btnDownloadAll" disabled>Download all</button>
+    <span id="counter">0 tracks</span>
+  </div>
+
+  <div class="workspace">
+    <section class="pane">
+      <div class="paneHead">Tracks <span class="hint" id="trackHint">Switch A/B/C/D without losing play position</span></div>
+      <div id="fileList"><div class="empty">No tracks yet. Add WAV or MP3 — batch upload supported.<br>Nothing is uploaded; processing is 100% local.</div></div>
+    </section>
+
+    <div class="side">
+      <section class="pane" style="flex:0 0 auto">
+        <div class="paneHead">Preview</div>
+        <div class="playerBox">
+          <div class="now" id="nowTitle">No selection</div>
+          <div class="nowStage" id="nowStage">—</div>
+          <div class="playerMeta" id="nowMeta"></div>
+          <div class="transport">
+            <button id="btnPlay" disabled>Play</button>
+            <button id="btnPause" disabled>Pause</button>
+            <input id="seek" type="range" min="0" max="1000" value="0" disabled>
+            <span id="timeLbl">0:00 / 0:00</span>
+          </div>
+        </div>
+        <div class="viz">
+          <div class="vizLbl">Waveform</div>
+          <canvas id="waveCanvas" height="90"></canvas>
+          <div class="vizLbl">Spectrum · before (dim) / after (bright)</div>
+          <canvas id="specCanvas" height="120"></canvas>
+        </div>
+      </section>
+
+      <section class="pane" style="flex:1 1 auto;min-height:180px">
+        <div class="paneHead">Settings</div>
+        <div class="settings" id="settingsPanel">
+          <h3>Presets</h3>
+          <div class="presets">
+            <button data-preset="Gentle">Gentle</button>
+            <button data-preset="Standard" class="on">Standard</button>
+            <button data-preset="Strong">Strong</button>
+          </div>
+
+          <h3>Denoise</h3>
+          <div class="ctl"><label>Noise percentile (quietest frames)</label><b id="v_noisePercentile">12%</b>
+            <input type="range" id="noisePercentile" min="4" max="30" step="1" value="12"></div>
+          <div class="ctl"><label>Max reduction</label><b id="v_maxReductionDb">7 dB</b>
+            <input type="range" id="maxReductionDb" min="0" max="24" step="0.5" value="7"></div>
+          <div class="ctl"><label>Oversubtraction</label><b id="v_oversubtraction">1.00×</b>
+            <input type="range" id="oversubtraction" min="0.3" max="2.5" step="0.05" value="1"></div>
+          <div class="ctl"><label>Time smoothing</label><b id="v_smoothTime">1</b>
+            <input type="range" id="smoothTime" min="0" max="4" step="1" value="1"></div>
+          <div class="ctl"><label>Frequency smoothing</label><b id="v_smoothFreq">1</b>
+            <input type="range" id="smoothFreq" min="0" max="4" step="1" value="1"></div>
+          <div class="ctl"><label>HF-only above (0 = full band)</label><b id="v_hfOnlyHz">off</b>
+            <input type="range" id="hfOnlyHz" min="0" max="12000" step="250" value="0"></div>
+          <div class="ctl"><label>FFT size</label><b id="v_fftSize">4096</b>
+            <input type="range" id="fftSize" min="2048" max="8192" step="2048" value="4096"></div>
+
+          <h3>Master EQ</h3>
+          <div class="ctl"><label>Low shelf</label><b id="v_eqLowShelfDb">+0.5 dB</b>
+            <input type="range" id="eqLowShelfDb" min="-6" max="6" step="0.1" value="0.5"></div>
+          <div class="ctl"><label>Presence</label><b id="v_eqPresenceDb">+1.0 dB</b>
+            <input type="range" id="eqPresenceDb" min="-6" max="6" step="0.1" value="1"></div>
+          <div class="ctl"><label>High shelf / air</label><b id="v_eqHighShelfDb">+1.5 dB</b>
+            <input type="range" id="eqHighShelfDb" min="-6" max="6" step="0.1" value="1.5"></div>
+
+          <h3>Glue + Limiter</h3>
+          <div class="ctl"><label>Comp threshold</label><b id="v_compThresholdDb">−18 dB</b>
+            <input type="range" id="compThresholdDb" min="-40" max="-6" step="1" value="-18"></div>
+          <div class="ctl"><label>Comp ratio</label><b id="v_compRatio">2.5 : 1</b>
+            <input type="range" id="compRatio" min="1.2" max="8" step="0.1" value="2.5"></div>
+          <div class="ctl"><label>Limiter ceiling</label><b id="v_limiterCeilingDb">−1.0 dBFS</b>
+            <input type="range" id="limiterCeilingDb" min="-3" max="0" step="0.1" value="-1"></div>
+        </div>
+      </section>
+
+      <section class="pane" style="flex:0 0 auto;max-height:200px">
+        <div class="paneHead">Report</div>
+        <div style="padding:8px" class="report" id="report">Processing reports appear here.</div>
+      </section>
+    </div>
+  </div>
+
+  <div id="log"></div>
+</div>
+<script src="dsp.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
